@@ -61,7 +61,7 @@ void addBook(const char *command, const char *filename, struct Index **bookIndex
     char *token = strtok(command_copy, "|");
     entry.key = atoi(token);  // Convert string to integer
 
-    if (binarySearch(*bookIndexArray,*size,entry.key) == -1 ){
+    if (binarySearch(*bookIndexArray,*size,entry.key) != -1 ){
         printf("Record with BookID=%d exists\n", entry.key);
     } else {
         // Get the next token (ISBN)
@@ -96,6 +96,80 @@ void addBook(const char *command, const char *filename, struct Index **bookIndex
 
         printf("Record with BookID=%d has been added to the database\n", entry.key);
     }
+}
+
+void findBook(const char *command, const char *filename, struct Index *bookIndexArray, size_t size) {
+    // Skip the "add " part
+    command += 5;
+
+    // Create a copy of the command for tokenization
+    char command_copy[20];  // Adjust the size as needed
+    strcpy(command_copy, command);
+
+    // Create an instance of struct Entry
+    struct Entry entry;
+
+    // Tokenize and process each value
+    char *token = strtok(command_copy, "|");
+    entry.key = atoi(token);  // Convert string to integer
+
+    int bookIndex = binarySearch(bookIndexArray,size,entry.key);
+
+    if ( bookIndex == -1 ){
+        printf("Record with BookID=%d  does not exists\n", entry.key);
+    } else {
+        const char *extension = ".db";
+        const char *mode = "rb";
+
+        // Open or create the file with the specified extension and mode
+        FILE *file = openFileWithExtension(filename, extension, mode);
+        fseek(file, bookIndexArray[bookIndex].offset, SEEK_SET);
+
+        size_t entry_size;
+        size_t read_size = fread(&entry_size, sizeof(size_t), 1, file);
+
+        // Allocate memory to read the entire entry
+        char *buffer = (char *)malloc(entry_size);
+        if (buffer == NULL) {
+            fprintf(stderr, "Memory allocation error.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Read the entire entry from the file
+        read_size = fread(buffer, 1, entry_size, file);
+
+        if (read_size != entry_size) {
+            fprintf(stderr, "Error reading entry from file.\n");
+            free(buffer);
+            exit(EXIT_FAILURE);
+        }
+
+        // Interpret the entry
+        struct Entry entry;
+
+        // Read key
+        memcpy(&entry.key, buffer, sizeof(int));
+        buffer += sizeof(int);
+
+        // Read isbn (if needed)
+        memcpy(entry.isbn, buffer, sizeof(entry.isbn));
+        buffer += sizeof(entry.isbn);
+
+        // Read title (if needed)
+        entry.title = strndup(buffer, strcspn(buffer, "|"));
+        buffer += strlen(entry.title) + 1; // Move past the title and separator
+
+        // Read editorial (if needed)
+        entry.editorial = strdup(buffer);
+
+        printf("%d|%.*s|%s|%s\n", entry.key, (int)sizeof(entry.isbn), entry.isbn, entry.title, entry.editorial);
+
+        // Free the allocated memory for the entry
+        free(entry.title);
+        fclose(file);
+    }
+
+    
 }
 
 void read_and_print_data(const char *filename) {
@@ -239,10 +313,10 @@ void printIndexData(const char *filename) {
 
 void printRec(const char *filename,const struct Index *array, size_t size) {
     const char *extension = ".db";
-        const char *mode = "rb";
+    const char *mode = "rb";
 
-        // Open or create the file with the specified extension and mode
-        FILE *file = openFileWithExtension(filename, extension, mode);
+    // Open or create the file with the specified extension and mode
+    FILE *file = openFileWithExtension(filename, extension, mode);
 
     if (file == NULL) {
         fprintf(stderr, "Error opening file %s for reading.\n", filename);
@@ -318,7 +392,7 @@ int binarySearch(const struct Index *array, size_t size, int targetId) {
         int mid = (low + high) / 2;
 
         if (array[mid].key == targetId) {
-            return -1;
+            return mid;
         } else if (array[mid].key < targetId) {
             low = mid + 1;
         } else {
@@ -327,5 +401,5 @@ int binarySearch(const struct Index *array, size_t size, int targetId) {
     }
 
     // ID not found
-    return 1;
+    return -1;
 }

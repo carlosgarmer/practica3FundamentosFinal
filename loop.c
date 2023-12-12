@@ -1,6 +1,28 @@
 #include "loop.h"
 #include "book.h"
 
+void saveBookIndexArray(const char *filename, const struct Index *array, size_t size) {
+    const char *extension = ".ind";
+    const char *mode = "wb";
+
+    // Open or create the file with the specified extension and mode
+    FILE *file = openFileWithExtension(filename, extension, mode);
+
+    if (!file) {
+        perror("Error opening file for writing");
+        exit(EXIT_FAILURE);
+    }
+
+    fwrite(&size, sizeof(size_t), 1, file); // Write the size of the array first
+
+    // Write each BookInfo entry to the file
+    for (size_t i = 0; i < size; i++) {
+        fwrite(&array[i], sizeof(struct Index), 1, file);
+    }
+
+    fclose(file);
+}
+
 void process_command(const char *command, const char *ordering_strategy, const char *filename, struct Index **bookIndexArray, size_t *size) {
     if (strncmp(command, "add ", 4) == 0) {
         // Receive book info and add it to the binary db
@@ -17,12 +39,13 @@ void process_command(const char *command, const char *ordering_strategy, const c
         // Read and print data from the binary file
         printRec(filename,*bookIndexArray,*size);
         printf("exit\n");
-    } else if (strcmp(command, "printAll") == 0) {
+    } else if (strncmp(command, "find ", 5) == 0) {
         // Read and print data from the binary file
-        read_and_print_data(filename);
+        findBook(command,filename,*bookIndexArray,*size);
         printf("exit\n");
     } else if (strcmp(command, "exit") == 0) {
         // Inform the user that the program will exit
+        saveBookIndexArray(filename,*bookIndexArray,*size);
         printf("all done\n");
     } else {
         // Handle unrecognized commands

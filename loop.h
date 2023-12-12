@@ -15,5 +15,6 @@ void loop(const char *ordering_strategy, const char *filename,struct Index **boo
  * @param filename: Name of the file
  **/
 void process_command(const char *command, const char *ordering_strategy, const char *filename, struct Index **bookIndexArray, size_t *size);
+void saveBookIndexArray(const char *filename, const struct Index *array, size_t size);
 
 #endif /* LOOP_H */

@@ -15,5 +15,6 @@ void insertIntoArray(struct Index **array, size_t *size, const struct Index *new
 void printBookInfoArray(const struct Index *array, size_t size);
 int binarySearch(const struct Index *array, size_t size, int targetId);
 void printRec(const char *filename,const struct Index *array, size_t size);
+void findBook(const char *command, const char *filename, struct Index *bookIndexArray, size_t size);
 
 #endif /* BOOK_H */
