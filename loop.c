@@ -13,8 +13,6 @@ void saveBookIndexArray(const char *filename, const struct Index *array, size_t 
         exit(EXIT_FAILURE);
     }
 
-    fwrite(&size, sizeof(size_t), 1, file); // Write the size of the array first
-
     // Write each BookInfo entry to the file
     for (size_t i = 0; i < size; i++) {
         fwrite(&array[i], sizeof(struct Index), 1, file);

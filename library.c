@@ -19,23 +19,31 @@ struct Index* readBookInfoArray(const char *filename, size_t *outSize) {
        return NULL;
     }
 
-    size_t arraySize;
+    // Calculate the size of the file by seeking to the end and getting the position
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
 
-    // Read the size of the array first
-    fread(&arraySize, sizeof(size_t), 1, file);
+    if (fileSize <= 0) {
+        // File is empty or has an issue, return NULL
+        fclose(file);
+        return NULL;
+    }
+
+    // Calculate the number of entries in the array
+    size_t arraySize = fileSize / sizeof(struct Index);
 
     // Allocate memory for the array
     struct Index *array = (struct Index*)malloc(arraySize * sizeof(struct Index));
 
     if (!array) {
         perror("Memory allocation error");
+        fclose(file);
         exit(EXIT_FAILURE);
     }
 
     // Read each BookInfo entry from the file
-    for (size_t i = 0; i < arraySize; i++) {
-        fread(&array[i], sizeof(struct Index), 1, file);
-    }
+    fseek(file, 0, SEEK_SET);  // Move back to the beginning of the file
+    fread(array, sizeof(struct Index), arraySize, file);
 
     fclose(file);
 
