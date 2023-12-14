@@ -10,6 +10,9 @@ FILE *openFileWithExtension(const char *filename, const char *extension, const c
     return fopen(filenameWithExtension, mode);
 }
 
+
+// Add book function
+
 void writeEntryToFile(FILE *file, const struct Entry *entry, struct Index **bookIndexArray, size_t *size) {
     // Calculate the size of the entry excluding the size_t field
     size_t entry_size = sizeof(int) + sizeof(entry->isbn) + strlen(entry->title) + strlen(entry->editorial) + 1; // 1 for the single '|' separator
@@ -98,145 +101,15 @@ void addBook(const char *command, const char *filename, struct Index **bookIndex
     }
 }
 
-void findBook(const char *command, const char *filename, struct Index *bookIndexArray, size_t size) {
-    // Skip the "add " part
-    command += 5;
+// Print Index functions
 
-    // Create a copy of the command for tokenization
-    char command_copy[20];  // Adjust the size as needed
-    strcpy(command_copy, command);
-
-    // Create an instance of struct Entry
-    struct Entry entry;
-
-    // Tokenize and process each value
-    char *token = strtok(command_copy, "|");
-    entry.key = atoi(token);  // Convert string to integer
-
-    int bookIndex = binarySearch(bookIndexArray,size,entry.key);
-
-    if ( bookIndex == -1 ){
-        printf("Record with BookID=%d  does not exists\n", entry.key);
-    } else {
-        const char *extension = ".db";
-        const char *mode = "rb";
-
-        // Open or create the file with the specified extension and mode
-        FILE *file = openFileWithExtension(filename, extension, mode);
-        fseek(file, bookIndexArray[bookIndex].offset, SEEK_SET);
-
-        size_t entry_size;
-        size_t read_size = fread(&entry_size, sizeof(size_t), 1, file);
-
-        // Allocate memory to read the entire entry
-        char *buffer = (char *)malloc(entry_size);
-        if (buffer == NULL) {
-            fprintf(stderr, "Memory allocation error.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        // Read the entire entry from the file
-        read_size = fread(buffer, 1, entry_size, file);
-
-        if (read_size != entry_size) {
-            fprintf(stderr, "Error reading entry from file.\n");
-            free(buffer);
-            exit(EXIT_FAILURE);
-        }
-
-        // Interpret the entry
-        struct Entry entry;
-
-        // Read key
-        memcpy(&entry.key, buffer, sizeof(int));
-        buffer += sizeof(int);
-
-        // Read isbn (if needed)
-        memcpy(entry.isbn, buffer, sizeof(entry.isbn));
-        buffer += sizeof(entry.isbn);
-
-        // Read title (if needed)
-        entry.title = strndup(buffer, strcspn(buffer, "|"));
-        buffer += strlen(entry.title) + 1; // Move past the title and separator
-
-        // Read editorial (if needed)
-        entry.editorial = strdup(buffer);
-
-        printf("%d|%.*s|%s|%s\n", entry.key, (int)sizeof(entry.isbn), entry.isbn, entry.title, entry.editorial);
-
-        // Free the allocated memory for the entry
-        free(entry.title);
-        fclose(file);
+void printBookIndexArray(const struct Index *array, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        printf("Entry #%zu\n",i);
+        printf("    key: #%d\n", array[i].key);
+        printf("    offset: #%ld\n",array[i].offset);
+        printf("    size: #%ld\n",array[i].size);
     }
-
-    
-}
-
-void read_and_print_data(const char *filename) {
-    const char *extension = ".db";
-    const char *mode = "ab";
-
-    // Open or create the file with the specified extension and mode
-    FILE *file = openFileWithExtension(filename, extension, mode);
-
-
-    if (file == NULL) {
-        fprintf(stderr, "Error opening file %s for reading.\n", filename);
-        exit(EXIT_FAILURE);
-    }
-
-    while (!feof(file)) {
-        size_t entry_size;
-        size_t read_size = fread(&entry_size, sizeof(size_t), 1, file);
-
-        if (read_size != 1 || feof(file)) {
-            break;
-        }
-
-        char *buffer = malloc(entry_size);
-
-        if (buffer == NULL) {
-            fprintf(stderr, "Memory allocation error.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        read_size = fread(buffer, 1, entry_size, file);
-
-        if (read_size != entry_size) {
-            fprintf(stderr, "Error reading entry from file.\n");
-            free(buffer);
-            exit(EXIT_FAILURE);
-        }
-
-       // Interpret the entry and print the information
-        struct Entry entry;
-
-        // Read key
-        memcpy(&entry.key, buffer, sizeof(int));
-        buffer += sizeof(int);
-
-        // Read isbn
-        memcpy(entry.isbn, buffer, sizeof(entry.isbn));
-        buffer += sizeof(entry.isbn);
-
-        // Read title
-        entry.title = strndup(buffer, strcspn(buffer, "|"));
-        buffer += strlen(entry.title) + 1; // Move past the title and separator
-
-        // Read editorial
-        entry.editorial = strdup(buffer);
-
-        // Print the information
-        printf("Key: %d\n", entry.key);
-        printf("ISBN: %s\n", entry.isbn);
-        printf("Title: %s\n", entry.title);
-        printf("Editorial: %s\n", entry.editorial);
-
-        // Free the allocated memory for the entry
-        free(entry.title);
-    }
-
-    fclose(file);
 }
 
 void printIndexData(const char *filename) {
@@ -311,6 +184,206 @@ void printIndexData(const char *filename) {
     fclose(file);
 }
 
+
+// Delete a book functions
+
+void deleteBook(const char *command,const char *filename,const char *ordering_strategy,struct Index **bookIndexArray,size_t *size,struct Deleted **bookDeletedArray,size_t *deletedSize) {
+    // Skip the "del " part
+    command += 4;
+
+    // Create a copy of the command for tokenization
+    char command_copy[256];  // Adjust the size as needed
+    strcpy(command_copy, command);
+
+    // Create an instance of struct Entry
+    struct Entry entry;
+
+    char *token = strtok(command_copy, "|");
+    entry.key = atoi(token);  // Convert string to integer
+
+    int bookIndex = binarySearch(*bookIndexArray,*size,entry.key);
+
+    if (bookIndex == -1) {
+        printf("Item with key %d does not exists\n", entry.key);
+    } else {
+        struct Deleted indexToDelete;
+
+        size_t index = bookIndex;
+        indexToDelete.offset =  (*bookIndexArray)[index].offset;
+        indexToDelete.size =  (*bookIndexArray)[index].size;
+
+        if (strcmp(ordering_strategy, "best_fit") == 0 ){
+            insertIntoDeletedArray(bookDeletedArray,deletedSize, &indexToDelete);
+        } else {
+            worstInsertIntoDeletedArray(bookDeletedArray,deletedSize, &indexToDelete);
+        }
+
+        deleteFromIndexArray(bookIndexArray,size,index);
+
+        printf("Record with BookID=%d has been deleted\n", entry.key);
+    }
+
+}
+
+void deleteFromIndexArray(struct Index **array, size_t *size, size_t indexToDelete) {
+
+    if (*size == 0 || indexToDelete >= *size) {
+        // Invalid index or empty array, do nothing
+        return;
+    }
+
+    // Shift elements to fill the gap
+    memmove(*array + indexToDelete, *array + indexToDelete + 1, (*size - indexToDelete - 1) * sizeof(struct Index));
+
+    // Reduce the size of the array
+    *array = realloc(*array, (*size - 1) * sizeof(struct Index));
+
+    if (*array == NULL && *size > 1) {
+        perror("Memory reallocation error");
+        exit(EXIT_FAILURE);
+    }
+
+    (*size)--;
+}
+
+void insertIntoDeletedArray(struct Deleted **array, size_t *size, const struct Deleted *indexToDelete) {
+    size_t i = 0;
+    while (i < *size && (*array)[i].size <= indexToDelete->size) {
+        i++;
+    }
+
+    // Shift elements to make space for the new book info
+    *array = realloc(*array, (*size + 1) * sizeof(struct Deleted));
+    memmove(*array + i + 1, *array + i, (*size - i) * sizeof(struct Deleted));
+
+    // Insert the new book info at the correct position
+    (*array)[i] = *indexToDelete;
+    (*size)++;
+}
+
+void worstInsertIntoDeletedArray(struct Deleted **array, size_t *size, const struct Deleted *indexToDelete) {
+    size_t i = 0;
+    while (i < *size && (*array)[i].size >= indexToDelete->size) {
+        i++;
+    }
+
+    // Shift elements to make space for the new book info
+    *array = realloc(*array, (*size + 1) * sizeof(struct Deleted));
+    memmove(*array + i + 1, *array + i, (*size - i) * sizeof(struct Deleted));
+
+    // Insert the new book info at the correct position
+    (*array)[i] = *indexToDelete;
+    (*size)++;
+}
+
+// Print deleted array
+
+void printDeletedArray(const struct Deleted *array, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        printf("Entry #%zu\n",i);
+        printf("    offset: #%ld\n",array[i].offset);
+        printf("    size: #%zu\n",array[i].size);
+    }
+}
+
+// Find Book functions
+void findBook(const char *command, const char *filename, struct Index *bookIndexArray, size_t size) {
+    // Skip the "add " part
+    command += 5;
+
+    // Create a copy of the command for tokenization
+    char command_copy[20];  // Adjust the size as needed
+    strcpy(command_copy, command);
+
+    // Create an instance of struct Entry
+    struct Entry entry;
+
+    // Tokenize and process each value
+    char *token = strtok(command_copy, "|");
+    entry.key = atoi(token);  // Convert string to integer
+
+    int bookIndex = binarySearch(bookIndexArray,size,entry.key);
+
+    if ( bookIndex == -1 ){
+        printf("Record with BookID=%d  does not exists\n", entry.key);
+    } else {
+        const char *extension = ".db";
+        const char *mode = "rb";
+
+        // Open or create the file with the specified extension and mode
+        FILE *file = openFileWithExtension(filename, extension, mode);
+        fseek(file, bookIndexArray[bookIndex].offset, SEEK_SET);
+
+        size_t entry_size;
+        size_t read_size = fread(&entry_size, sizeof(size_t), 1, file);
+
+        // Allocate memory to read the entire entry
+        char *buffer = (char *)malloc(entry_size);
+        if (buffer == NULL) {
+            fprintf(stderr, "Memory allocation error.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        // Read the entire entry from the file
+        read_size = fread(buffer, 1, entry_size, file);
+
+        if (read_size != entry_size) {
+            fprintf(stderr, "Error reading entry from file.\n");
+            free(buffer);
+            exit(EXIT_FAILURE);
+        }
+
+        // Interpret the entry
+        struct Entry entry;
+
+        // Read key
+        memcpy(&entry.key, buffer, sizeof(int));
+        buffer += sizeof(int);
+
+        // Read isbn (if needed)
+        memcpy(entry.isbn, buffer, sizeof(entry.isbn));
+        buffer += sizeof(entry.isbn);
+
+        // Read title (if needed)
+        entry.title = strndup(buffer, strcspn(buffer, "|"));
+        buffer += strlen(entry.title) + 1; // Move past the title and separator
+
+        // Read editorial (if needed)
+        entry.editorial = strdup(buffer);
+
+        printf("%d|%.*s|%s|%s\n", entry.key, (int)sizeof(entry.isbn), entry.isbn, entry.title, entry.editorial);
+
+        // Free the allocated memory for the entry
+        free(entry.title);
+        fclose(file);
+    }
+
+    
+}
+
+int binarySearch(const struct Index *array, size_t size, int targetId) {
+    int low = 0;
+    int high = size - 1;
+
+    while (low <= high) {
+        int mid = (low + high) / 2;
+
+        if (array[mid].key == targetId) {
+            return mid;
+        } else if (array[mid].key < targetId) {
+            low = mid + 1;
+        } else {
+            high = mid - 1;
+        }
+    }
+
+    // Key not found
+    return -1;
+}
+
+
+// Print Book information functions
+
 void printRec(const char *filename,const struct Index *array, size_t size) {
     const char *extension = ".db";
     const char *mode = "rb";
@@ -375,128 +448,4 @@ void printRec(const char *filename,const struct Index *array, size_t size) {
     fclose(file);
 }
 
-void printBookIndexArray(const struct Index *array, size_t size) {
-    for (size_t i = 0; i < size; i++) {
-        printf("Entry #%zu\n",i);
-        printf("    key: #%d\n", array[i].key);
-        printf("    offset: #%ld\n",array[i].offset);
-        printf("    size: #%ld\n",array[i].size);
-    }
-}
 
-void printDeletedArray(const struct Deleted *array, size_t size) {
-    for (size_t i = 0; i < size; i++) {
-        printf("Entry #%zu\n",i);
-        printf("    offset: #%ld\n",array[i].offset);
-        printf("    size: #%zu\n",array[i].size);
-    }
-}
-
-int binarySearch(const struct Index *array, size_t size, int targetId) {
-    int low = 0;
-    int high = size - 1;
-
-    while (low <= high) {
-        int mid = (low + high) / 2;
-
-        if (array[mid].key == targetId) {
-            return mid;
-        } else if (array[mid].key < targetId) {
-            low = mid + 1;
-        } else {
-            high = mid - 1;
-        }
-    }
-
-    // ID not found
-    return -1;
-}
-
-void insertIntoDeletedArray(struct Deleted **array, size_t *size, const struct Deleted *indexToDelete) {
-    size_t i = 0;
-    while (i < *size && (*array)[i].size < indexToDelete->size) {
-        i++;
-    }
-
-    // Shift elements to make space for the new book info
-    *array = realloc(*array, (*size + 1) * sizeof(struct Deleted));
-    memmove(*array + i + 1, *array + i, (*size - i) * sizeof(struct Deleted));
-
-    // Insert the new book info at the correct position
-    (*array)[i] = *indexToDelete;
-    (*size)++;
-}
-
-void worstInsertIntoDeletedArray(struct Deleted **array, size_t *size, const struct Deleted *indexToDelete) {
-    size_t i = 0;
-    while (i < *size && (*array)[i].size > indexToDelete->size) {
-        i++;
-    }
-
-    // Shift elements to make space for the new book info
-    *array = realloc(*array, (*size + 1) * sizeof(struct Deleted));
-    memmove(*array + i + 1, *array + i, (*size - i) * sizeof(struct Deleted));
-
-    // Insert the new book info at the correct position
-    (*array)[i] = *indexToDelete;
-    (*size)++;
-}
-
-void deleteFromIndexArray(struct Index **array, size_t *size, size_t indexToDelete) {
-    if (*size == 0 || indexToDelete >= *size) {
-        // Invalid index or empty array, do nothing
-        return;
-    }
-
-    // Shift elements to fill the gap
-    for (size_t i = indexToDelete; i < *size - 1; i++) {
-        (*array)[i] = (*array)[i + 1];
-    }
-
-    // Reduce the size of the array
-    *array = realloc(*array, (*size - 1) * sizeof(struct Index));
-
-    if (*array == NULL && *size > 1) {
-        perror("Memory reallocation error");
-        exit(EXIT_FAILURE);
-    }
-
-    (*size)--;
-}
-
-void deleteBook(const char *command,const char *filename,const char *ordering_strategy,struct Index **bookIndexArray,size_t *size,struct Deleted **bookDeletedArray,size_t *deletedSize) {
-    // Skip the "del " part
-    command += 4;
-
-    // Create a copy of the command for tokenization
-    char command_copy[256];  // Adjust the size as needed
-    strcpy(command_copy, command);
-
-    // Create an instance of struct Entry
-    struct Entry entry;
-
-    char *token = strtok(command_copy, "|");
-    entry.key = atoi(token);  // Convert string to integer
-
-    int bookIndex = binarySearch(*bookIndexArray,*size,entry.key);
-
-    if (bookIndex == -1) {
-        printf("Record with BookID=%d  does not exists\n", entry.key);
-    } else {
-        struct Deleted indexToDelete;
-
-        size_t index = bookIndex;
-        indexToDelete.offset =  (*bookIndexArray)[index].offset;
-        indexToDelete.size =  (*bookIndexArray)[index].size;
-
-        if (strcmp(ordering_strategy, "worst_fit") == 0 ){
-            worstInsertIntoDeletedArray(bookDeletedArray,deletedSize, &indexToDelete);
-        } else {
-            insertIntoDeletedArray(bookDeletedArray,deletedSize, &indexToDelete);
-        }
-
-        deleteFromIndexArray(bookIndexArray,size,index);
-
-    }
-
-}

@@ -5,7 +5,7 @@ struct Index* readBookIndexArray(const char *filename, size_t *outSize) {
     const char *extension = ".ind";
     const char *mode = "rb";
 
-    // Open or create the file with the specified extension and mode
+    // Open the file with the specified extension and mode
     FILE *file = openFileWithExtension(filename, extension, mode);
 
     if (!file) {
@@ -16,14 +16,14 @@ struct Index* readBookIndexArray(const char *filename, size_t *outSize) {
     fseek(file, 0, SEEK_END);
     long fileSize = ftell(file);
 
-    if (fileSize <= 0) {
+    if (fileSize <= 0 || fileSize % (sizeof(int) + sizeof(long int) + sizeof(size_t)) != 0) {
         // File is empty or has an issue, return NULL
         fclose(file);
         return NULL;
     }
 
     // Calculate the number of entries in the array
-    size_t arraySize = fileSize / sizeof(struct Index);
+    size_t arraySize = fileSize / (sizeof(int) + sizeof(long int) + sizeof(size_t));
 
     // Allocate memory for the array
     struct Index *array = (struct Index*)malloc(arraySize * sizeof(struct Index));
@@ -34,9 +34,14 @@ struct Index* readBookIndexArray(const char *filename, size_t *outSize) {
         exit(EXIT_FAILURE);
     }
 
-    // Read each BookInfo entry from the file
+    // Read each field of BookInfo entry from the file
     fseek(file, 0, SEEK_SET);  // Move back to the beginning of the file
-    fread(array, sizeof(struct Index), arraySize, file);
+
+    for (size_t i = 0; i < arraySize; i++) {
+        fread(&array[i].key, sizeof(int), 1, file);
+        fread(&array[i].offset, sizeof(long int), 1, file);
+        fread(&array[i].size, sizeof(size_t), 1, file);
+    }
 
     fclose(file);
 
@@ -105,9 +110,11 @@ void saveBookIndexArray(const char *filename, const struct Index *array, size_t 
         exit(EXIT_FAILURE);
     }
 
-    // Write each BookInfo entry to the file
+    // Write each field of BookInfo entry to the file
     for (size_t i = 0; i < size; i++) {
-        fwrite(&array[i], sizeof(struct Index), 1, file);
+        fwrite(&array[i].key, sizeof(int), 1, file);
+        fwrite(&array[i].offset, sizeof(long int), 1, file);
+        fwrite(&array[i].size, sizeof(size_t), 1, file);
     }
 
     fclose(file);
@@ -156,9 +163,6 @@ void process_command(const char *command, const char *ordering_strategy, const c
         // Delete book info and add it to the binary db
         deleteBook(command,filename,ordering_strategy,bookIndexArray,size,bookDeletedArray,deletedSize);
         printf("exit\n");
-    } else if (strcmp(command, "printData") == 0) {
-        // Read and print data from the binary file
-        read_and_print_data(filename);
     } else if (strcmp(command, "printInd") == 0) {
         // Read and print data from the binary file
         printBookIndexArray(*bookIndexArray,*size);

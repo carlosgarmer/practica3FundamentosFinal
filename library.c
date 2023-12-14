@@ -2,13 +2,6 @@
 #include "struct.h"
 #include "book.h"
 
-/**
- * Main function that accepts two command-line arguments:
- * @param argc: Number of command-line arguments
- * @param argv: Array of command-line argument strings
- * @return: Exit status
- **/
-
 int main(int argc, char *argv[]) {
     /** Check if the correct number of arguments is provided **/
     if (argc != 3) {
