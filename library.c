@@ -8,50 +8,6 @@
  * @param argv: Array of command-line argument strings
  * @return: Exit status
  **/
-struct Index* readBookInfoArray(const char *filename, size_t *outSize) {
-    const char *extension = ".ind";
-    const char *mode = "rb";
-
-    // Open or create the file with the specified extension and mode
-    FILE *file = openFileWithExtension(filename, extension, mode);
-
-    if (!file) {
-       return NULL;
-    }
-
-    // Calculate the size of the file by seeking to the end and getting the position
-    fseek(file, 0, SEEK_END);
-    long fileSize = ftell(file);
-
-    if (fileSize <= 0) {
-        // File is empty or has an issue, return NULL
-        fclose(file);
-        return NULL;
-    }
-
-    // Calculate the number of entries in the array
-    size_t arraySize = fileSize / sizeof(struct Index);
-
-    // Allocate memory for the array
-    struct Index *array = (struct Index*)malloc(arraySize * sizeof(struct Index));
-
-    if (!array) {
-        perror("Memory allocation error");
-        fclose(file);
-        exit(EXIT_FAILURE);
-    }
-
-    // Read each BookInfo entry from the file
-    fseek(file, 0, SEEK_SET);  // Move back to the beginning of the file
-    fread(array, sizeof(struct Index), arraySize, file);
-
-    fclose(file);
-
-    // Set the output size
-    *outSize = arraySize;
-
-    return array;
-}
 
 int main(int argc, char *argv[]) {
     /** Check if the correct number of arguments is provided **/
@@ -73,10 +29,13 @@ int main(int argc, char *argv[]) {
     printf("exit\n");
 
     size_t arraySize = 0;
-    struct Index *bookIndexArray = readBookInfoArray(filename,&arraySize);
+    struct Index *bookIndexArray = readBookIndexArray(filename,&arraySize);
+
+    size_t deletedSize = 0;
+    struct Deleted *bookDeletedArray = readDeletedArray(filename,&deletedSize);
     
 
-    loop(ordering_strategy, filename,&bookIndexArray, &arraySize);
+    loop(ordering_strategy, filename,&bookIndexArray, &arraySize,&bookDeletedArray, &deletedSize);
 
     return 0; /** Return success code **/
 }
